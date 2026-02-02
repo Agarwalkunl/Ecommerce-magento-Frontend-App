@@ -8,7 +8,8 @@ import { Ionicons } from '@react-native-vector-icons/ionicons';
 export const CategoriesScreen = () => {
   const { loading, error, data, refetch } = useQuery(GET_CATEGORIES);
   const [refreshing, setRefreshing] = useState(false);
-  const [selectedCategory, setSelectedCategory] = useState(null);
+  const [selectedParentCategory, setSelectedParentCategory] = useState(null);
+  const [selectedSubCategory, setSelectedSubCategory] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState('name');
   const [stockFilter, setStockFilter] = useState('all');
@@ -41,32 +42,85 @@ export const CategoriesScreen = () => {
     );
   }
 
-  const categories = data?.categories?.items[0]?.children || [];
-  const products = data?.categories?.items[0]?.products?.items || [];
+  // Extract products from the response
+  const products = data?.categories?.items?.[0]?.products?.items || [];
+  
+  // Extract unique categories from all products and separate by level
+  const level2CategoriesMap = new Map();
+  const level3CategoriesMap = new Map();
+  
+  products.forEach(product => {
+    product.categories?.forEach(cat => {
+      if (cat.level === 2) {
+        if (!level2CategoriesMap.has(cat.id)) {
+          level2CategoriesMap.set(cat.id, {
+            id: cat.id,
+            name: cat.name,
+            product_count: cat.product_count,
+            level: cat.level
+          });
+        }
+      } else if (cat.level === 3) {
+        if (!level3CategoriesMap.has(cat.id)) {
+          level3CategoriesMap.set(cat.id, {
+            id: cat.id,
+            name: cat.name,
+            product_count: cat.product_count,
+            level: cat.level
+          });
+        }
+      }
+    });
+  });
+  
+  const level2Categories = Array.from(level2CategoriesMap.values());
+  const level3Categories = Array.from(level3CategoriesMap.values());
+  
+  // Filter subcategories based on selected parent category
+  const filteredSubCategories = selectedParentCategory
+    ? level3Categories.filter(subCat => {
+        // Find products that have both the parent category and this subcategory
+        return products.some(product => {
+          const hasParent = product.categories?.some(cat => cat.name === selectedParentCategory && cat.level === 2);
+          const hasSub = product.categories?.some(cat => cat.id === subCat.id && cat.level === 3);
+          return hasParent && hasSub;
+        });
+      })
+    : [];
   
   let filteredProducts = products.filter(p => {
     const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
                          p.sku.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesStock = stockFilter === 'all' || p.stock_status === stockFilter;
     
-    // Category filter - check if product belongs to selected category
-    const matchesCategory = !selectedCategory || 
-                           (p.categories && p.categories.some(cat => cat.name === selectedCategory));
+    // Category filter - hierarchical filtering
+    let matchesCategory = true;
+    if (selectedParentCategory) {
+      const hasParent = p.categories?.some(cat => cat.name === selectedParentCategory && cat.level === 2);
+      if (selectedSubCategory) {
+        // Both parent and subcategory selected
+        const hasSub = p.categories?.some(cat => cat.name === selectedSubCategory && cat.level === 3);
+        matchesCategory = hasParent && hasSub;
+      } else {
+        // Only parent category selected
+        matchesCategory = hasParent;
+      }
+    }
     
     return matchesSearch && matchesStock && matchesCategory;
   });
 
   if (sortBy === 'price-low') {
     filteredProducts = [...filteredProducts].sort((a, b) => 
-      (a.price?.maximalPrice?.amount?.value || 0) - (b.price?.maximalPrice?.amount?.value || 0)
+      (a.price_range?.minimum_price?.regular_price?.value || 0) - (b.price_range?.minimum_price?.regular_price?.value || 0)
     );
   } else if (sortBy === 'price-high') {
     filteredProducts = [...filteredProducts].sort((a, b) => 
-      (b.price?.maximalPrice?.amount?.value || 0) - (a.price?.maximalPrice?.amount?.value || 0)
+      (b.price_range?.minimum_price?.regular_price?.value || 0) - (a.price_range?.minimum_price?.regular_price?.value || 0)
     );
   } else if (sortBy === 'newest') {
     filteredProducts = [...filteredProducts].sort((a, b) => 
-      new Date(b.created_at) - new Date(a.created_at)
+      (b.id || 0) - (a.id || 0)
     );
   } else {
     filteredProducts = [...filteredProducts].sort((a, b) => 
@@ -75,18 +129,53 @@ export const CategoriesScreen = () => {
   }
 
 
-  const renderCategoryTab = ({ item }) => {
-    const isSelected = selectedCategory === item.name;
+  const renderParentCategoryTab = ({ item }) => {
+    const isSelected = selectedParentCategory === item.name;
     return (
       <TouchableOpacity
         style={[styles.categoryTab, isSelected && styles.categoryTabActive]}
-        onPress={() => setSelectedCategory(isSelected ? null : item.name)}
+        onPress={() => {
+          if (isSelected) {
+            // Deselect parent category
+            setSelectedParentCategory(null);
+            setSelectedSubCategory(null);
+          } else {
+            // Select new parent category and clear subcategory
+            setSelectedParentCategory(item.name);
+            setSelectedSubCategory(null);
+          }
+        }}
       >
         <Text style={[styles.categoryTabText, isSelected && styles.categoryTabTextActive]}>
           {item.name}
         </Text>
         <View style={[styles.productCountBadge, isSelected && styles.productCountBadgeActive]}>
           <Text style={[styles.productCountText, isSelected && styles.productCountTextActive]}>
+            {item.product_count}
+          </Text>
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
+  const renderSubCategoryTab = ({ item }) => {
+    const isSelected = selectedSubCategory === item.name;
+    return (
+      <TouchableOpacity
+        style={[styles.subCategoryTab, isSelected && styles.subCategoryTabActive]}
+        onPress={() => setSelectedSubCategory(isSelected ? null : item.name)}
+      >
+        <Ionicons 
+          name="arrow-forward" 
+          size={14} 
+          color={isSelected ? '#667eea' : '#999'} 
+          style={styles.subCategoryIcon}
+        />
+        <Text style={[styles.subCategoryTabText, isSelected && styles.subCategoryTabTextActive]}>
+          {item.name}
+        </Text>
+        <View style={[styles.subProductCountBadge, isSelected && styles.subProductCountBadgeActive]}>
+          <Text style={[styles.subProductCountText, isSelected && styles.subProductCountTextActive]}>
             {item.product_count}
           </Text>
         </View>
@@ -232,16 +321,47 @@ export const CategoriesScreen = () => {
         </View>
       </Modal>
 
+      {/* Parent Categories (Level 2) */}
       <View style={styles.categoriesContainer}>
+        <Text style={styles.categoryLabel}>Categories</Text>
         <FlatList
           horizontal
-          data={categories}
-          keyExtractor={(item, index) => `${item.name}-${index}`}
-          renderItem={renderCategoryTab}
+          data={level2Categories}
+          keyExtractor={(item, index) => `parent-${item.id}-${index}`}
+          renderItem={renderParentCategoryTab}
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.categoriesScrollContent}
         />
       </View>
+
+      {/* Subcategories (Level 3) - Only show when parent category is selected */}
+      {selectedParentCategory && filteredSubCategories.length > 0 && (
+        <View style={styles.subCategoriesContainer}>
+          <View style={styles.subCategoryHeader}>
+            <Text style={styles.subCategoryLabel}>
+              {selectedParentCategory} » Subcategories
+            </Text>
+            <TouchableOpacity 
+              onPress={() => {
+                setSelectedParentCategory(null);
+                setSelectedSubCategory(null);
+              }}
+              style={styles.clearCategoryButton}
+            >
+              <Ionicons name="close-circle" size={18} color="#667eea" />
+              <Text style={styles.clearCategoryText}>Clear</Text>
+            </TouchableOpacity>
+          </View>
+          <FlatList
+            horizontal
+            data={filteredSubCategories}
+            keyExtractor={(item, index) => `sub-${item.id}-${index}`}
+            renderItem={renderSubCategoryTab}
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.categoriesScrollContent}
+          />
+        </View>
+      )}
 
       <FlatList
         data={filteredProducts}
@@ -481,6 +601,89 @@ const styles = StyleSheet.create({
     color: '#667eea',
   },
   productCountTextActive: {
+    color: '#ffffff',
+  },
+  categoryLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#666',
+    paddingHorizontal: 16,
+    paddingBottom: 8,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  subCategoriesContainer: {
+    backgroundColor: '#f8f9fa',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+  },
+  subCategoryHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingBottom: 8,
+  },
+  subCategoryLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#667eea',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  clearCategoryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  clearCategoryText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#667eea',
+  },
+  subCategoryTab: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    marginHorizontal: 4,
+    borderWidth: 1.5,
+    borderColor: '#e0e0e0',
+  },
+  subCategoryTabActive: {
+    backgroundColor: '#f0f4ff',
+    borderColor: '#667eea',
+  },
+  subCategoryIcon: {
+    marginRight: 6,
+  },
+  subCategoryTabText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#666',
+    marginRight: 6,
+  },
+  subCategoryTabTextActive: {
+    color: '#667eea',
+  },
+  subProductCountBadge: {
+    backgroundColor: '#f5f5f5',
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 8,
+  },
+  subProductCountBadgeActive: {
+    backgroundColor: '#667eea',
+  },
+  subProductCountText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#666',
+  },
+  subProductCountTextActive: {
     color: '#ffffff',
   },
   productsContainer: {

@@ -12,94 +12,21 @@ export const GET_CATEGORIES = gql`
     categories {
         total_count
         items {
-            id
-            uid
             name
-            url_path
-            url_key
-            description
-            image
-            level
-            product_count
             products {
                 total_count
                 items {
-                    attribute_set_id
-                    canonical_url
-                    created_at
-                    gift_message_available
+                    uid
                     id
                     name
-                    rating_summary
-                    review_count
                     sku
-                    special_from_date
-                    special_price
-                    special_to_date
-                    stock_status
-                    swatch_image
-                    tier_price
                     type_id
-                    uid
-                    updated_at
                     url_key
-                    url_path
                     url_suffix
-                    description {
-                        html
-                    }
-                    short_description {
-                        html
-                    }
-                    meta_title
-                    meta_keyword
-                    meta_description
+                    stock_status
                     image {
                         url
                         label
-                        position
-                        disabled
-                    }
-                    small_image {
-                        url
-                        label
-                        position
-                        disabled
-                    }
-                    thumbnail {
-                        url
-                        label
-                        position
-                        disabled
-                    }
-                    media_gallery {
-                        url
-                        label
-                        position
-                        disabled
-                    }
-                    color
-                    country_of_manufacture
-                    manufacturer
-                    price {
-                        regularPrice {
-                            amount {
-                                currency
-                                value
-                            }
-                        }
-                        minimalPrice {
-                            amount {
-                                currency
-                                value
-                            }
-                        }
-                        maximalPrice {
-                            amount {
-                                currency
-                                value
-                            }
-                        }
                     }
                     price_range {
                         minimum_price {
@@ -107,55 +34,14 @@ export const GET_CATEGORIES = gql`
                                 value
                                 currency
                             }
-                            final_price {
-                                value
-                                currency
-                            }
-                            discount {
-                                amount_off
-                                percent_off
-                            }
-                        }
-                        maximum_price {
-                            regular_price {
-                                value
-                                currency
-                            }
-                            final_price {
-                                value
-                                currency
-                            }
-                            discount {
-                                amount_off
-                                percent_off
-                            }
                         }
                     }
                     categories {
-                        id
-                        uid
                         name
-                        url_path
+                        product_count
+                        id
                         level
                     }
-                }
-            }
-            children {
-                id
-                uid
-                name
-                url_path
-                url_key
-                available_sort_by
-                children_count
-                created_at
-                product_count
-                level
-                breadcrumbs {
-                    category_id
-                    category_name
-                    category_level
-                    category_url_key
                 }
             }
         }
@@ -163,3 +49,69 @@ export const GET_CATEGORIES = gql`
 }
 `;
 
+export const GET_PRODUCT_DETAIL = gql`
+  query ProductDetail($sku: String!) {
+    products(filter: { sku: { eq: $sku } }) {
+      items {
+        id
+        uid
+        name
+        sku
+        type_id
+        description {
+          html
+        }
+        stock_status
+        url_key
+        url_suffix
+        image {
+          url
+          label
+        }
+        price_range {
+          minimum_price {
+            regular_price {
+              value
+              currency
+            }
+          }
+        }
+        categories {
+          id
+          name
+        }
+        ... on ConfigurableProduct {
+          configurable_options {
+            id
+            attribute_code
+            label
+            values {
+              value_index
+              label
+            }
+          }
+          variants {
+            product {
+              id
+              name
+              sku
+              stock_status
+              image {
+                url
+                label
+              }
+              price_range {
+                minimum_price {
+                  regular_price {
+                    value
+                    currency
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+`;

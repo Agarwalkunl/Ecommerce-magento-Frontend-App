@@ -1,10 +1,13 @@
 import React from 'react';
-import { View, Text, Image, StyleSheet, Dimensions } from 'react-native';
+import { View, Text, Image, StyleSheet, Dimensions, TouchableOpacity } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 import { API_CONFIG } from '../config/api.config';
 
 const { width } = Dimensions.get('window');
 
 export const ProductCard = ({ product }) => {
+  const navigation = useNavigation();
+  
   let imageUrl = product?.image?.url || product?.swatch_image || '';
   
   if (imageUrl) {
@@ -16,8 +19,12 @@ export const ProductCard = ({ product }) => {
     ? imageUrl 
     : `${API_CONFIG.IMAGE_BASE_URL}${imageUrl}`;
   
+  const handlePress = () => {
+    navigation.navigate('ProductDetail', { sku: product.sku });
+  };
+  
   return (
-    <View style={styles.card}>
+    <TouchableOpacity style={styles.card} onPress={handlePress} activeOpacity={0.7}>
       <Image
         source={{ uri: fullImageUrl }}
         style={styles.image}
@@ -27,9 +34,9 @@ export const ProductCard = ({ product }) => {
         <Text style={styles.productName} numberOfLines={2}>{product.name}</Text>
         <Text style={styles.sku}>{product.sku}</Text>
         
-        {product.price?.maximalPrice?.amount && (
+        {product.price_range?.minimum_price?.regular_price && (
           <Text style={styles.price}>
-            {product.price.maximalPrice.amount.currency} ${product.price.maximalPrice.amount.value}
+            {product.price_range.minimum_price.regular_price.currency} ${product.price_range.minimum_price.regular_price.value}
           </Text>
         )}
         
@@ -41,7 +48,7 @@ export const ProductCard = ({ product }) => {
           </View>
         </View>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 };
 
